@@ -305,7 +305,7 @@
     for (let i = 0; i < finalPayload.byteLength; i++) {
         binary += String.fromCharCode(finalPayload[i]);
     }
-    return "BLYRIE_ENC(RSA-AES):" + btoa(binary);
+    return "blyrie_shield_0x" + btoa(binary);
   }
     function getMatchingRule(url, method) {
     if (!rules || rules.length === 0) return null;
@@ -388,7 +388,7 @@
     if (bodyType === 'FormData' || bodyType === 'URLSearchParams') {
       let newData = bodyType === 'FormData' ? new FormData() : new URLSearchParams();
       for (const [key, val] of originalBody.entries()) {
-        if (typeof val === 'string' && explicitFields.includes(key) && !val.startsWith("BLYRIE_ENC(RSA-AES):")) {
+        if (typeof val === 'string' && explicitFields.includes(key) && !val.startsWith("blyrie_shield_0x")) {
           const encryptedVal = await encryptData(val);
           newData.append(key, encryptedVal);
           isModified = true;
@@ -406,7 +406,7 @@
           if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
           const val = obj[key];
           const shouldEncrypt = forceEncrypt || explicitFields.includes(key);
-          if (shouldEncrypt && typeof val === 'string' && !val.startsWith("BLYRIE_ENC(RSA-AES):")) {
+          if (shouldEncrypt && typeof val === 'string' && !val.startsWith("blyrie_shield_0x")) {
             obj[key] = await encryptData(val);
             isModified = true;
           } else if (typeof val === 'object' && val !== null) {

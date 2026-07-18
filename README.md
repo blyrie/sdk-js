@@ -62,7 +62,7 @@ curl -X POST https://api.blyrie.com/api/v1/decrypt \
   -H "x-api-key: YOUR_SECRET_API_KEY" \
   -d '{
     "organizationId": "YOUR_ORG_ID",
-    "encryptedPayload": "BLYRIE_ENC(.....)"
+    "encryptedPayload": "blyrie_shield_0x..."
   }'
 ```
 
