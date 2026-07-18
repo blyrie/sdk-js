@@ -48,7 +48,7 @@ To achieve bulletproof client-side security, it is highly recommended to configu
 
 Example CSP Header:
 ```http
-Content-Security-Policy: default-src 'self' https://api.blyrie.com; img-src 'self' data:; connect-src 'self' https://api.blyrie.com; frame-src 'none';
+Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.blyrie.com; connect-src 'self' https://blyrie.com https://api.blyrie.com; img-src 'self' data:; frame-src 'none';
 ```
 This forces the browser engine to block unauthorized external image requests, WebRTC channels, or hidden iframes that malware might use to bypass JavaScript-based RASP.
 
