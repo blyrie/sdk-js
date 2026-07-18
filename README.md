@@ -38,8 +38,19 @@ Use `mode=display` on your internal admin dashboards where you do not want to en
 In display mode, the SDK goes into an **"idle" state**. It will **not** encrypt any outgoing requests. This prevents the SDK from accidentally encrypting admin activities.
 
 > **IMPORTANT: The SDK NEVER decrypts data.** 
-> `mode=display` does **not** decrypt data in the browser. Decrypting data in the browser would require exposing your Private Key, which is a massive security risk. 
 > To decrypt and display data in your Admin Dashboard, your backend server must request decryption via the Blyrie Server-to-Server API using your secret API Key. Your backend then sends the plaintext data to your dashboard frontend.
+
+### 3. Recommended Security Headers (CSP)
+
+While the Blyrie SDK actively protects against data exfiltration via `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`, and `Web Worker`, advanced attackers may attempt to leak data via native DOM elements like `<iframe>` or `<img src="...">` (DOM-based Data Exfiltration). 
+
+To achieve bulletproof client-side security, it is highly recommended to configure a strict **Content Security Policy (CSP)** header on your web server alongside the SDK.
+
+Example CSP Header:
+```http
+Content-Security-Policy: default-src 'self' https://api.blyrie.com; img-src 'self' data:; connect-src 'self' https://api.blyrie.com; frame-src 'none';
+```
+This forces the browser engine to block unauthorized external image requests, WebRTC channels, or hidden iframes that malware might use to bypass JavaScript-based RASP.
 
 ## Decrypting Data (Server-Side)
 

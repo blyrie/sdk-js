@@ -1,33 +1,25 @@
-
 (function() {
   console.info("[Blyrie SDK] Active Security Middleware v2.0 Initialized");
   console.info("[Blyrie SDK] Modules: Semantic DLP, Behavioral RASP, Zero-Knowledge Telemetry");
-
   const scriptTag = document.currentScript || document.querySelector('script[src*="sdk.js"]');
   if (!scriptTag) {
     console.error("[Blyrie SDK] Failed to find script tag.");
     return;
   }
-
     const urlParams = new URLSearchParams(scriptTag.src.split('?')[1]);
   const orgId = urlParams.get('org');
   const mode = urlParams.get('mode') || 'full'; 
-
     if (!orgId) {
     console.error("[Blyrie SDK] Missing 'org' parameter in script src.");
     return;
   }
-
     console.log(`[Blyrie SDK] Booting in mode: ${mode.toUpperCase()}`);
-
     let rules = [];
   const scriptOrigin = new URL(scriptTag.src).origin;
   const BLYRIE_API_URL = scriptOrigin.includes('cdn.blyrie.com') ? 'https://blyrie.com' : scriptOrigin;
-
   const originalFetch = window.fetch;
   const originalXHR = window.XMLHttpRequest.prototype.send;
   const originalOpen = window.XMLHttpRequest.prototype.open;
-
   const clientFingerprint = (function() {
     let fp = sessionStorage.getItem('__blyrie_fp');
     if (!fp) {
@@ -36,7 +28,6 @@
     }
     return fp;
   })();
-
   const BlyrieSemanticEngine = {
     patterns: {
       ID_KTP: {
@@ -64,7 +55,6 @@
         valRegex: /.+/
       }
     },
-
     classify: function(dataObj) {
       const result = {
         detected: false,
@@ -73,26 +63,20 @@
         byteSize: 0,
         entropyScore: 0
       };
-
       const classSet = new Set();
-
       function traverse(obj, visited = new Set()) {
         if (visited.has(obj)) return;
         visited.add(obj);
-
         for (let key in obj) {
           if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
           const val = obj[key];
-
           if (typeof val === 'string') {
             result.byteSize += val.length * 2; 
-
             for (let className in BlyrieSemanticEngine.patterns) {
               const rule = BlyrieSemanticEngine.patterns[className];
               const keyMatch = rule.keyRegex.test(key);
               const isWildcardVal = rule.valRegex.source === '.+' || rule.valRegex.source === '^.+$';
               const valMatch = !isWildcardVal && rule.valRegex.test(val.trim());
-
               if (keyMatch || valMatch) {
                 result.detected = true;
                 classSet.add(className);
@@ -106,15 +90,12 @@
           }
         }
       }
-
       traverse(dataObj);
       result.classes = Array.from(classSet);
       result.entropyScore = Math.min(1.0, parseFloat((result.matchedFields.length * 0.25).toFixed(2)));
       return result;
     }
   };
-
-
   const BlyrieMemoryEngine = {
     _stateKey: '__blyrie_runtime_state',
     _memory: {
@@ -122,7 +103,6 @@
       destinationMap: {}, 
       totalPiiBytesTransferred: 0
     },
-
     init: function() {
       try {
         const saved = sessionStorage.getItem(this._stateKey);
@@ -133,26 +113,21 @@
         console.log("[Blyrie RASP] Could not read memory state from sessionStorage:", e);
       }
     },
-
     save: function() {
       try {
         sessionStorage.setItem(this._stateKey, JSON.stringify(this._memory));
       } catch (e) {
       }
     },
-
     recordAndCheck: function(url, method, semanticResult) {
       const now = Date.now();
       const anomalies = [];
-
       this._memory.requestTimestamps = this._memory.requestTimestamps.filter(t => now - t < 60000);
       this._memory.requestTimestamps.push(now);
-
       const velocity = this._memory.requestTimestamps.length;
       if (semanticResult.detected) {
         this._memory.totalPiiBytesTransferred += semanticResult.byteSize;
       }
-
       if (velocity > 60 || (semanticResult.detected && velocity > 20)) {
         anomalies.push({
           type: "VELOCITY_EXCEEDED",
@@ -160,13 +135,10 @@
           description: `High request velocity detected (${velocity} req/min). Potential scraper/IDOR bot behavior.`
         });
       }
-
       if (semanticResult.detected) {
         const urlObj = new URL(url, window.location.origin);
         const cleanPath = urlObj.origin + urlObj.pathname;
-
         const isHighRiskPath = /\/(export|dump|backup|download|csv|raw|query_all)/i.test(cleanPath);
-
         for (const cls of semanticResult.classes) {
           if (!this._memory.destinationMap[cls]) {
             this._memory.destinationMap[cls] = [cleanPath];
@@ -186,7 +158,6 @@
           }
         }
       }
-
       if (semanticResult.byteSize > 50000) {
         anomalies.push({
           type: "BULK_EXFILTRATION_ATTEMPT",
@@ -194,9 +165,7 @@
           description: `Unusually large PII/PHI payload size (${Math.round(semanticResult.byteSize / 1024)} KB) in a single request.`
         });
       }
-
       this.save();
-
       return {
         anomalies: anomalies,
         metrics: {
@@ -206,27 +175,20 @@
       };
     }
   };
-
   BlyrieMemoryEngine.init();
-
-
   const BlyrieBeacon = {
     _queue: [],
     _flushTimer: null,
-
     sendSignals: function(url, method, anomalies, metrics, semanticResult) {
       if (!anomalies || anomalies.length === 0) return;
-
       const urlObj = new URL(url, window.location.origin);
       const cleanPath = urlObj.origin + urlObj.pathname;
-
       for (const anomaly of anomalies) {
         if (anomaly.severity === 'CRITICAL') {
           console.error(`[Blyrie RASP Alert] ${anomaly.type} - ${anomaly.description}`);
         } else {
           console.warn(`[Blyrie RASP Alert] ${anomaly.type} - ${anomaly.description}`);
         }
-
         this._queue.push({
           type: anomaly.type,
           severity: anomaly.severity,
@@ -237,7 +199,6 @@
           entropyScore: semanticResult.entropyScore
         });
       }
-
       const hasCritical = anomalies.some(a => a.severity === 'CRITICAL');
       if (hasCritical || this._queue.length >= 3) {
         this.flush(cleanPath, method, metrics);
@@ -245,17 +206,14 @@
         this._flushTimer = setTimeout(() => this.flush(cleanPath, method, metrics), 3000);
       }
     },
-
     flush: function(endpoint, method, metrics) {
       if (this._queue.length === 0) return;
       if (this._flushTimer) {
         clearTimeout(this._flushTimer);
         this._flushTimer = null;
       }
-
       const signalsToSend = [...this._queue];
       this._queue = [];
-
       const payload = JSON.stringify({
         organizationId: orgId,
         clientFingerprint: clientFingerprint,
@@ -264,7 +222,6 @@
         signals: signalsToSend,
         metrics: metrics || {}
       });
-
       const beaconUrl = `${BLYRIE_API_URL}/api/sdk/beacon`;
       if (navigator.sendBeacon) {
         try {
@@ -273,7 +230,6 @@
         } catch (e) {
         }
       }
-
       originalFetch.call(window, beaconUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -283,10 +239,7 @@
       }).catch(() => {});
     }
   };
-
-
   let serverPublicKey = null;
-
   async function importPublicKey(pemString) {
     try {
       const pemHeader = "-----BEGIN PUBLIC KEY-----";
@@ -295,13 +248,11 @@
         pemString.indexOf(pemHeader) + pemHeader.length,
         pemString.indexOf(pemFooter)
       ).replace(/\s/g, '');
-
             const binaryDerString = window.atob(pemContents);
       const binaryDer = new Uint8Array(binaryDerString.length);
       for (let i = 0; i < binaryDerString.length; i++) {
         binaryDer[i] = binaryDerString.charCodeAt(i);
       }
-
       serverPublicKey = await window.crypto.subtle.importKey(
         "spki",
         binaryDer.buffer,
@@ -314,13 +265,11 @@
       console.error("[Blyrie SDK] Failed to import Public Key:", e);
     }
   }
-
   async function encryptData(text) {
     if (!serverPublicKey) {
       console.error("[Blyrie SDK] CRITICAL: Public key not available. Failing closed to prevent data leakage.");
       throw new Error("Blyrie SDK: Encryption key is missing. Request aborted to prevent sensitive data exposure.");
     }
-
     const aesKeyBuffer = window.crypto.getRandomValues(new Uint8Array(32));
     const aesKey = await window.crypto.subtle.importKey(
       "raw",
@@ -329,43 +278,35 @@
       true,
       ["encrypt"]
     );
-
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const encodedText = new TextEncoder().encode(text);
-
         const ciphertextBuffer = await window.crypto.subtle.encrypt(
       { name: "AES-GCM", iv: iv },
       aesKey,
       encodedText
     );
-
         const cipherArray = new Uint8Array(ciphertextBuffer);
     const dataPayload = new Uint8Array(iv.length + cipherArray.length);
     dataPayload.set(iv, 0);
     dataPayload.set(cipherArray, iv.length);
-
     const encryptedAesKeyBuffer = await window.crypto.subtle.encrypt(
       { name: "RSA-OAEP" },
       serverPublicKey,
       aesKeyBuffer
     );
     const encryptedAesKeyArray = new Uint8Array(encryptedAesKeyBuffer);
-
     const keyLen = encryptedAesKeyArray.length;
     const finalPayload = new Uint8Array(2 + keyLen + dataPayload.length);
-
         finalPayload[0] = (keyLen >> 8) & 0xFF;
     finalPayload[1] = keyLen & 0xFF;
     finalPayload.set(encryptedAesKeyArray, 2);
     finalPayload.set(dataPayload, 2 + keyLen);
-
         let binary = '';
     for (let i = 0; i < finalPayload.byteLength; i++) {
         binary += String.fromCharCode(finalPayload[i]);
     }
     return "BLYRIE_ENC(RSA-AES):" + btoa(binary);
   }
-
     function getMatchingRule(url, method) {
     if (!rules || rules.length === 0) return null;
     return rules.find(rule => {
@@ -377,14 +318,11 @@
       return regex.test(url);
     });
   }
-
   async function processOutgoingPayload(originalBody, matchedRule, url, method) {
     if (!originalBody) return originalBody;
-
     let bodyType = 'unknown';
     let dataObj = null;
     let parsedJson = false;
-
     if (typeof FormData !== 'undefined' && originalBody instanceof FormData) {
       bodyType = 'FormData';
     } else if (typeof URLSearchParams !== 'undefined' && originalBody instanceof URLSearchParams) {
@@ -420,7 +358,6 @@
       bodyType = 'object';
       dataObj = originalBody; 
     }
-
     if (bodyType === 'FormData' || bodyType === 'URLSearchParams') {
       dataObj = Object.create(null);
       for (const [key, val] of originalBody.entries()) {
@@ -434,27 +371,20 @@
         }
       }
     }
-
     if (dataObj) {
       const semanticResult = BlyrieSemanticEngine.classify(dataObj);
-
       const { anomalies, metrics } = BlyrieMemoryEngine.recordAndCheck(url, method, semanticResult);
-
       if (anomalies && anomalies.length > 0) {
         setTimeout(() => {
           BlyrieBeacon.sendSignals(url, method, anomalies, metrics, semanticResult);
         }, 0);
       }
     }
-
     let explicitFields = matchedRule ? (matchedRule.fieldsToEncrypt || []) : [];
-
     if (semanticResult && semanticResult.detected) {
       explicitFields = [...new Set([...explicitFields, ...semanticResult.matchedFields])];
     }
-
     let isModified = false;
-
     if (bodyType === 'FormData' || bodyType === 'URLSearchParams') {
       let newData = bodyType === 'FormData' ? new FormData() : new URLSearchParams();
       for (const [key, val] of originalBody.entries()) {
@@ -472,12 +402,10 @@
       async function encryptFieldsRecursive(obj, visited = new Set(), forceEncrypt = false) {
         if (visited.has(obj)) return;
         visited.add(obj);
-
         for (let key in obj) {
           if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
           const val = obj[key];
           const shouldEncrypt = forceEncrypt || explicitFields.includes(key);
-
           if (shouldEncrypt && typeof val === 'string' && !val.startsWith("BLYRIE_ENC(RSA-AES):")) {
             obj[key] = await encryptData(val);
             isModified = true;
@@ -486,7 +414,6 @@
           }
         }
       }
-
       let targetObj;
       if (parsedJson) {
         targetObj = JSON.parse(originalBody);
@@ -498,11 +425,9 @@
         }
       }
       await encryptFieldsRecursive(targetObj);
-
             if (isModified) {
         console.log(`[Blyrie Active DLP] Encrypted ${explicitFields.length} sensitive field(s) before network transmission.`);
       }
-
       if (bodyType === 'string' && parsedJson) {
         return JSON.stringify(targetObj);
       } else if (bodyType === 'Blob-JSON') {
@@ -513,11 +438,8 @@
         return targetObj;
       }
     }
-
     return originalBody;
   }
-
-
   let rulesLoadedPromise = originalFetch.call(window, `${BLYRIE_API_URL}/api/sdk/rules/${orgId}`)
     .then(res => res.json())
     .then(async data => {
@@ -534,7 +456,6 @@
     .catch(err => {
       console.error("[Blyrie SDK] Failed to load rules from server.", err);
     });
-
   async function ensureRulesReady() {
     if (serverPublicKey || mode === 'display') return;
     try {
@@ -544,19 +465,15 @@
       ]);
     } catch (e) {}
   }
-
   window.fetch = async function(...args) {
     let [resource, config] = args;
-
         if (config && config._blyrieInternal === true) {
       return originalFetch.apply(window, args);
     }
-
     let url = '';
     let method = 'GET';
     let originalBody = null;
     let isRequestObj = typeof Request !== 'undefined' && resource instanceof Request;
-
     if (isRequestObj) {
       url = resource.url;
       method = (config && config.method) ? config.method : (resource.method || 'GET');
@@ -598,21 +515,29 @@
         originalBody = config.body;
       }
     }
-
         try {
       url = new URL(url, window.location.origin).href;
     } catch(e) {}
-
     if (url && url.includes('/api/sdk/')) {
       return originalFetch.apply(window, args);
     }
-
     await ensureRulesReady();
     const matchedRule = getMatchingRule(url, method);
-
-        if (mode !== 'display' && originalBody !== null && originalBody !== undefined) {
+    if (mode !== 'display' && url.includes('?')) {
+      const qs = url.split('?')[1];
+      const params = Object.fromEntries(new URLSearchParams(qs));
+      const semanticResult = BlyrieSemanticEngine.classify(params);
+      if (semanticResult && semanticResult.detected) {
+        const { anomalies, metrics } = BlyrieMemoryEngine.recordAndCheck(url, method, semanticResult);
+        if (anomalies && anomalies.length > 0) {
+          setTimeout(() => BlyrieBeacon.sendSignals(url, method, anomalies, metrics, semanticResult), 0);
+        }
+        console.error("[Blyrie RASP] CRITICAL: Sensitive data detected in URL Query String. Request blocked.");
+        throw new Error("Blyrie SDK: Request blocked due to sensitive PII in URL GET parameters.");
+      }
+    }
+    if (mode !== 'display' && originalBody !== null && originalBody !== undefined) {
       const processedBody = await processOutgoingPayload(originalBody, matchedRule, url, method);
-
             if (isRequestObj && (!config || config.body === undefined)) {
         const newInit = { body: processedBody };
         if (typeof FormData !== 'undefined' && processedBody instanceof FormData) {
@@ -624,7 +549,6 @@
         args[0] = resource;
       } else {
         if (!config) config = {};
-
                 let finalBody = processedBody;
         if (typeof finalBody === 'object' && finalBody !== null &&
             !(finalBody instanceof FormData) && 
@@ -636,22 +560,18 @@
             !(typeof Document !== 'undefined' && finalBody instanceof Document)) {
           finalBody = JSON.stringify(finalBody);
         }
-
                 config.body = finalBody;
         args[1] = config;
       }
     }
-
         console.log("[Blyrie SDK Debug] Fetching URL:", url);
     return originalFetch.apply(window, args);
   };
-
   Object.defineProperty(window, 'fetch', {
     value: window.fetch,
     writable: false,
     configurable: false
   });
-
     window.XMLHttpRequest.prototype.open = function(method, url, async) {
     this._blyrieMethod = method;
     this._blyrieAsync = async !== false; 
@@ -660,21 +580,27 @@
     } catch(e) {
       this._blyrieUrl = url;
     }
+    if (mode !== 'display' && typeof this._blyrieUrl === 'string' && this._blyrieUrl.includes('?')) {
+      const qs = this._blyrieUrl.split('?')[1];
+      const params = Object.fromEntries(new URLSearchParams(qs));
+      const semanticResult = BlyrieSemanticEngine.classify(params);
+      if (semanticResult && semanticResult.detected) {
+        console.error("[Blyrie RASP] CRITICAL: Sensitive data detected in XHR URL. Request blocked.");
+        throw new Error("Blyrie SDK: XHR blocked due to sensitive PII in URL.");
+      }
+    }
     return originalOpen.apply(this, arguments);
   };
-
   window.XMLHttpRequest.prototype.send = function(body) {
     if (this._blyrieUrl && !this._blyrieUrl.includes('/api/sdk/') && body !== undefined && body !== null) {
        if (mode === 'display') {
          return originalXHR.apply(this, [body]);
        }
-
        if (this._blyrieAsync === false) {
            console.error("[Blyrie SDK] CRITICAL: Synchronous XHR is not supported by Web Crypto API. Request blocked to prevent PII leakage.");
            this.dispatchEvent(new ProgressEvent("error"));
            throw new Error("Blyrie SDK: Synchronous XHR aborted for security reasons.");
        }
-
               ensureRulesReady().then(() => {
          const matchedRule = getMatchingRule(this._blyrieUrl, this._blyrieMethod || 'POST');
          return processOutgoingPayload(body, matchedRule, this._blyrieUrl, this._blyrieMethod || 'POST');
@@ -699,7 +625,6 @@
     }
     return originalXHR.apply(this, [body]);
   };
-
     Object.defineProperty(window.XMLHttpRequest.prototype, 'send', {
     value: window.XMLHttpRequest.prototype.send,
     writable: false,
@@ -710,5 +635,66 @@
     writable: false,
     configurable: false
   });
-
+  if (navigator.sendBeacon) {
+    const originalSendBeacon = navigator.sendBeacon;
+    navigator.sendBeacon = function(url, data) {
+      if (mode === 'display') return originalSendBeacon.apply(this, arguments);
+      console.warn("[Blyrie RASP] Intercepted sendBeacon, routing via secure async fetch...");
+      window.fetch(url, { method: 'POST', body: data, keepalive: true }).catch(() => {});
+      return true;
+    };
+    Object.defineProperty(navigator, 'sendBeacon', { value: navigator.sendBeacon, writable: false, configurable: false });
+  }
+  if (window.WebSocket) {
+    const OriginalWebSocket = window.WebSocket;
+    function SecureWebSocket(url, protocols) {
+      const urlStr = url.toString();
+      if (mode !== 'display' && urlStr.includes('?')) {
+        const queryParams = Object.fromEntries(new URLSearchParams(urlStr.split('?')[1]));
+        const semanticResult = BlyrieSemanticEngine.classify(queryParams);
+        if (semanticResult && semanticResult.detected) {
+          console.error("[Blyrie RASP] CRITICAL: Blocked WebSocket connection containing sensitive PII in URL.");
+          throw new Error("Blyrie SDK: Blocked WebSocket connection containing sensitive data in URL.");
+        }
+      }
+      const ws = new OriginalWebSocket(url, protocols);
+      const originalSend = ws.send;
+      ws.send = function(data) {
+        if (mode === 'display') return originalSend.apply(this, arguments);
+        if (typeof data === 'string') {
+          try {
+            const parsed = JSON.parse(data);
+            const semanticResult = BlyrieSemanticEngine.classify(parsed);
+            if (semanticResult && semanticResult.detected) {
+               console.error("[Blyrie RASP] CRITICAL: Blocked WebSocket from sending sensitive PII.");
+               return; 
+            }
+          } catch(e) {}
+        }
+        return originalSend.apply(this, arguments);
+      };
+      return ws;
+    }
+    SecureWebSocket.prototype = OriginalWebSocket.prototype;
+    SecureWebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+    SecureWebSocket.OPEN = OriginalWebSocket.OPEN;
+    SecureWebSocket.CLOSING = OriginalWebSocket.CLOSING;
+    SecureWebSocket.CLOSED = OriginalWebSocket.CLOSED;
+    window.WebSocket = SecureWebSocket;
+    Object.defineProperty(window, 'WebSocket', { value: window.WebSocket, writable: false, configurable: false });
+  }
+  if (window.Worker) {
+    const OriginalWorker = window.Worker;
+    window.Worker = function(scriptURL, options) {
+      if (mode !== 'display') {
+        const urlStr = scriptURL.toString();
+        if (urlStr.startsWith('blob:') || urlStr.startsWith('data:')) {
+           console.error("[Blyrie RASP] CRITICAL: Blocked untrusted inline Web Worker (Blob/Data URI).");
+           throw new Error("Blyrie SDK: Inline Web Workers are blocked to prevent RASP bypass.");
+        }
+      }
+      return new OriginalWorker(scriptURL, options);
+    };
+    Object.defineProperty(window, 'Worker', { value: window.Worker, writable: false, configurable: false });
+  }
 })();
