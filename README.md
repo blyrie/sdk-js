@@ -1,8 +1,31 @@
 # Blyrie Web SDK
 
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Security](https://img.shields.io/badge/Security-Zero--Knowledge-success)
+![Size](https://img.shields.io/badge/Size-Ultra--Lightweight-brightgreen)
+![CDN](https://img.shields.io/badge/Delivery-Edge_CDN-orange)
+
 The **Blyrie Web SDK** is a zero-code active security middleware designed to encrypt sensitive PII (Personally Identifiable Information) directly in the user's browser before it ever reaches your servers. 
 
 By encrypting data at the edge (in the browser), you ensure that your backend database remains secure even in the event of a breach. Blyrie operates on a **Zero-Knowledge** architecture: we hold the keys, you hold the encrypted data.
+
+## How It Works
+
+```mermaid
+sequenceDiagram
+    participant User as User Browser
+    participant SDK as Blyrie SDK
+    participant API as Your Backend API
+    participant KMS as Blyrie KMS
+
+    User->>SDK: Types sensitive data (e.g., Credit Card)
+    SDK->>SDK: Intercepts network request & encrypts locally
+    SDK->>API: Sends ENCRYPTED payload (blyrie_shield_0x...)
+    Note over API: Your database stores only encrypted data
+    API->>KMS: Request decryption via Secret API Key
+    KMS-->>API: Returns plaintext to server memory
+    API-->>User: Securely process request
+```
 
 ## Features
 
@@ -56,6 +79,25 @@ This forces the browser engine to block unauthorized external image requests, We
 
 To view the original data, your backend must send the encrypted payload to the Blyrie Decryption API.
 
+### Option 1: Node.js (Recommended)
+```javascript
+const response = await fetch('https://api.blyrie.com/api/v1/decrypt', {
+  method: 'POST',
+  headers: { 
+    'Content-Type': 'application/json',
+    'x-api-key': 'YOUR_SECRET_API_KEY' 
+  },
+  body: JSON.stringify({
+    organizationId: 'YOUR_ORG_ID',
+    encryptedPayload: req.body.creditCard // e.g., 'blyrie_shield_0x...'
+  })
+});
+
+const { plaintext } = await response.json();
+console.log("Decrypted Data:", plaintext);
+```
+
+### Option 2: cURL
 ```bash
 curl -X POST https://api.blyrie.com/api/v1/decrypt \
   -H "Content-Type: application/json" \
