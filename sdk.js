@@ -104,10 +104,8 @@
       totalPiiBytesTransferred: 0
     },
     init: function() {
-      // Memory state is intentionally kept only in JS closure to prevent sessionStorage tampering by XSS
     },
     save: function() {
-      // Intentionally left blank. We do not sync to sessionStorage anymore to prevent manipulation.
     },
     recordAndCheck: function(url, method, semanticResult) {
       const now = Date.now();
@@ -412,7 +410,6 @@
         try {
           targetObj = typeof structuredClone === 'function' ? structuredClone(dataObj) : JSON.parse(JSON.stringify(dataObj));
         } catch (e) {
-          // Deep copy fallback that strips functions to avoid shallow copy mutation bug
           targetObj = JSON.parse(JSON.stringify(dataObj, (key, value) => {
             if (typeof value === 'function') return undefined;
             return value;
@@ -556,7 +553,6 @@
         args[1] = config;
       }
     }
-        // (Debug log removed to prevent URL parameter leakage in production)
     return originalFetch.apply(window, args);
   };
   Object.defineProperty(window, 'fetch', {
