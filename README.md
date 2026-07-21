@@ -12,19 +12,20 @@ By encrypting data at the edge (in the browser), you ensure that your backend da
 ## How It Works
 
 ```mermaid
-sequenceDiagram
-    participant User as User Browser
-    participant SDK as Blyrie SDK
-    participant API as Your Backend API
-    participant KMS as Blyrie KMS
-
-    User->>SDK: Types sensitive data (e.g., Credit Card)
-    SDK->>SDK: Intercepts network request & encrypts locally
-    SDK->>API: Sends ENCRYPTED payload (blyrie_shield_0x...)
-    Note over API: Your database stores only encrypted data
-    API->>KMS: Request decryption via Secret API Key
-    KMS-->>API: Returns plaintext to server memory
-    API-->>User: Securely process request
+graph LR
+    User[User Browser] -->|1. Types PII| SDK(Blyrie SDK)
+    SDK -->|2. Auto-Encrypts Data| Backend[Your Backend Server]
+    
+    Backend -->|3. Saves Encrypted Data| DB[(Your Database)]
+    
+    Backend -.->|4. Request Decryption| KMS{Blyrie KMS}
+    KMS -.->|5. Returns Plaintext| Backend
+    
+    style User fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style SDK fill:#4ade80,stroke:#166534,stroke-width:2px,color:#000
+    style Backend fill:#60a5fa,stroke:#1e3a8a,stroke-width:2px,color:#fff
+    style DB fill:#9ca3af,stroke:#374151,stroke-width:2px
+    style KMS fill:#f87171,stroke:#991b1b,stroke-width:2px,color:#fff
 ```
 
 ## Features
