@@ -64,7 +64,22 @@ In display mode, the SDK goes into an **"idle" state**. It will **not** encrypt 
 > **IMPORTANT: The SDK NEVER decrypts data.** 
 > To decrypt and display data in your Admin Dashboard, your backend server must request decryption via the Blyrie Server-to-Server API using your secret API Key. Your backend then sends the plaintext data to your dashboard frontend.
 
-### 3. Recommended Security Headers (CSP)
+### 3. Recommended Security Integrations (SRI & CSP)
+
+**A. Subresource Integrity (SRI)**
+
+To ensure the Blyrie SDK script is never tampered with (e.g., in the event of a CDN compromise), you should load the SDK using Subresource Integrity (SRI). This guarantees the browser will only execute the script if its cryptographic hash matches.
+
+```html
+<script 
+  src="https://cdn.blyrie.com/sdk.js?org=YOUR_ORG_ID&mode=capture"
+  integrity="sha384-[YOUR_GENERATED_HASH]" 
+  crossorigin="anonymous">
+</script>
+```
+*Note: You can generate the `sha384` hash by running `shasum -b -a 384 sdk.js | awk '{ print $1 }' | xxd -r -p | base64` on the downloaded SDK file.*
+
+**B. Content Security Policy (CSP)**
 
 While the Blyrie SDK actively protects against data exfiltration via `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`, and `Web Worker`, advanced attackers may attempt to leak data via native DOM elements like `<iframe>` or `<img src="...">` (DOM-based Data Exfiltration). 
 
