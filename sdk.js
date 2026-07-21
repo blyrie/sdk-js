@@ -104,20 +104,10 @@
       totalPiiBytesTransferred: 0
     },
     init: function() {
-      try {
-        const saved = sessionStorage.getItem(this._stateKey);
-        if (saved) {
-          this._memory = JSON.parse(saved);
-        }
-      } catch (e) {
-        console.log("[Blyrie RASP] Could not read memory state from sessionStorage:", e);
-      }
+      // Memory state is intentionally kept only in JS closure to prevent sessionStorage tampering by XSS
     },
     save: function() {
-      try {
-        sessionStorage.setItem(this._stateKey, JSON.stringify(this._memory));
-      } catch (e) {
-      }
+      // Intentionally left blank. We do not sync to sessionStorage anymore to prevent manipulation.
     },
     recordAndCheck: function(url, method, semanticResult) {
       const now = Date.now();
@@ -234,8 +224,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: payload,
-        keepalive: true,
-        _blyrieInternal: true
+        keepalive: true
       }).catch(() => {});
     }
   };
@@ -301,9 +290,10 @@
     finalPayload[1] = keyLen & 0xFF;
     finalPayload.set(encryptedAesKeyArray, 2);
     finalPayload.set(dataPayload, 2 + keyLen);
-        let binary = '';
-    for (let i = 0; i < finalPayload.byteLength; i++) {
-        binary += String.fromCharCode(finalPayload[i]);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < finalPayload.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, finalPayload.subarray(i, i + chunkSize));
     }
     return "blyrie_shield_0x" + btoa(binary);
   }
@@ -371,8 +361,9 @@
         }
       }
     }
+    let semanticResult = null;
     if (dataObj) {
-      const semanticResult = BlyrieSemanticEngine.classify(dataObj);
+      semanticResult = BlyrieSemanticEngine.classify(dataObj);
       const { anomalies, metrics } = BlyrieMemoryEngine.recordAndCheck(url, method, semanticResult);
       if (anomalies && anomalies.length > 0) {
         setTimeout(() => {
@@ -421,7 +412,11 @@
         try {
           targetObj = typeof structuredClone === 'function' ? structuredClone(dataObj) : JSON.parse(JSON.stringify(dataObj));
         } catch (e) {
-          targetObj = Object.assign({}, dataObj);
+          // Deep copy fallback that strips functions to avoid shallow copy mutation bug
+          targetObj = JSON.parse(JSON.stringify(dataObj, (key, value) => {
+            if (typeof value === 'function') return undefined;
+            return value;
+          }));
         }
       }
       await encryptFieldsRecursive(targetObj);
@@ -467,9 +462,6 @@
   }
   window.fetch = async function(...args) {
     let [resource, config] = args;
-        if (config && config._blyrieInternal === true) {
-      return originalFetch.apply(window, args);
-    }
     let url = '';
     let method = 'GET';
     let originalBody = null;
@@ -564,7 +556,7 @@
         args[1] = config;
       }
     }
-        console.log("[Blyrie SDK Debug] Fetching URL:", url);
+        // (Debug log removed to prevent URL parameter leakage in production)
     return originalFetch.apply(window, args);
   };
   Object.defineProperty(window, 'fetch', {
